@@ -1,5 +1,5 @@
 import torch
-from code.dataset import dataset
+from dataset import dataset
 from utils import *
 
 # In[ ]:

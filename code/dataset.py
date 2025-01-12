@@ -12,7 +12,6 @@ store_id: ['CA_1', 'CA_2', 'CA_3', 'CA_4', 'TX_1', 'TX_2', 'TX_3', 'WI_1', 'WI_2
 state_id" ['CA', 'TX', 'WI']
 '''
 
-
 # Convert weekly price information into daily price information for each item.
 def convert_price_file(data_path):
     # load data
@@ -60,7 +59,7 @@ def make_features(data_path):
     train_df = sales_train_evaluation.drop(["id","item_id","dept_id","cat_id","store_id","state_id"], axis=1)  # d_1 ~ d_1941
     target_values = train_df.values # (item: 30490, day: 1941)
     
-    #################################
+    ##########################################################
     # FEAT_DYNAMIC_CAT
     
     # Event type
@@ -81,7 +80,7 @@ def make_features(data_path):
     event_features = np.stack([event_type1, event_type2, event_name1, event_name2])
     dynamic_cat = np.array([event_features] * len(sales_train_evaluation)) # (item(list): 30490, event type/name: 4, day: 1941)
 
-    #################################
+    ##########################################################
     # FEAT_DYNAMIC_REAL        
     # SNAP_CA, TX, WI
     snap_features = calendar[['snap_CA', 'snap_TX', 'snap_WI']]
@@ -111,7 +110,7 @@ def make_features(data_path):
     all_price_features = np.stack([price_feature, normalized_price_per_item, normalized_price_per_group], axis=1) # (item(list): 30490, price type: 3, day: 1941)
     dynamic_real = np.concatenate([snap_features_expand, all_price_features], axis=1) # (item(list): 30490, price type: 6, day: 1941)
     
-    #################################
+    ##########################################################
     # FEAT_STATIC_CAT
     # We then go on to build static features (features which are constant and series-specific). 
     # Here, we make use of all categorical features that are provided to us as part of the M5 data.
@@ -137,126 +136,60 @@ def make_features(data_path):
 
     stat_cat_cardinalities = [len(item_ids_un), len(dept_ids_un), len(cat_ids_un), len(store_ids_un), len(state_ids_un)] # [3049, 7, 3, 10, 3]
 
-    #################################
-    # FEAT_STATIC_REAL
-    # None
+    return target_values, dynamic_real, dynamic_cat, stat_cat, stat_cat_cardinalities
 
-    #################################
-    # FEAT_DYNAMIC_PAST (Feature unavailable in the future)
-    
-    # Period of continuous zero sales
-    sales_zero_period = np.zeros_like(target_values)
-    sales_zero_period[:, 0] = 1
-
-    for i in range(1, 1969):    
-        sales_zero_period[:, i] = sales_zero_period[:, i-1] + 1
-        sales_zero_period[target_values[:, i] != 0, i] = 0
-    
-    dynamic_past = np.expand_dims(sales_zero_period, 1) # (item: 30490, 1, day: 1941)
-
-    return target_values, dynamic_real, dynamic_cat, dynamic_past, stat_cat, stat_cat_cardinalities
-
-def dataset(data_path, exclude_no_sales=False, ds_split=True, prediction_start=1942):    
-
-    # make features
-    target_values, dynamic_real, dynamic_cat, dynamic_past, stat_cat, stat_cat_cardinalities = make_features(data_path)
-
-    #################################
-    # TARGET
-    # This is for evaluation set
-    # D1 ~ 1941: train , D1942 ~ 1969: test
-    PREDICTION_START = 1942
-
-    # exclude no sale periods
-    if exclude_no_sales:
-        second_sale = get_second_sale_idx(target_values)
-        second_sale = np.clip(second_sale, None, PREDICTION_START-28-1)
-    else:
-        second_sale = np.zeros(30490, dtype=np.int32)
-
-    start_date = pd.Timestamp("2011-01-29", freq='1D')
-    m5_dates = [start_date + pd.DateOffset(days=int(d)) for d in second_sale]
-
+def make_dataset(data_path):    
 
     ##########################################################
-    #  1          ~         1886     ~     1914     ~     1942
-    #           train        /    val       /      test
+    # make features
+    # target_values: (item: 30490, day: 1941)
+    # dynamic_real: (item(list): 30490, price type: 6, day: 1941)
+    # dynamic_cat: (item(list): 30490, event type/name: 4, day: 1941)
+    # stat_cat: (item: 30490, stat: 5)
+    # stat_cat_cardinalities: [3049, 7, 3, 10, 3]
+    target_values, dynamic_real, dynamic_cat, stat_cat, stat_cat_cardinalities = make_features(data_path)
 
-    #  Mode                 1886~         1914~          1942~    NaN    1969
-    #                              train    /    val       |      test
+    # start_dates: (item: 30490, )
+    start_dates = [pd.Timestamp("2011-01-29", freq='1D') for _ in range(target_values.shape[0])]
 
-    if ds_split==True:
+    ##########################################################
+    #  1                   ~               1914      ~     1942
+    #                    train               |      test
+    idx_train_end = 1914
+    idx_test_end = 1942
 
-        idx_train_end = PREDICTION_START - 1    # index from 0
-        idx_val_end = 1914 - 1
+    ### Train Set
+    train_set = [
+        {
+            FieldName.TARGET: target[..., :idx_train_end],
+            FieldName.START: start,
+            FieldName.FEAT_DYNAMIC_REAL: fdr[..., :idx_train_end],
+            FieldName.FEAT_DYNAMIC_CAT: fdc[..., :idx_train_end],
+            FieldName.FEAT_STATIC_CAT: fsc
+        }
+        for (target, start, fdr, fdc, fsc) in zip(target_values, 
+                                                    start_dates, 
+                                                    dynamic_real, 
+                                                    dynamic_cat,  
+                                                    stat_cat)
+    ]
+    train_ds = ListDataset(train_set, freq="D", shuffle=False)
 
-        ### Train Set
-        train_set = [
-            {
-                FieldName.TARGET: target[first:idx_train_end],
-                FieldName.START: start,
-                FieldName.FEAT_DYNAMIC_REAL: fdr[...,first:idx_train_end],
-                FieldName.FEAT_DYNAMIC_CAT: fdc[...,first:idx_train_end],
-                FieldName.FEAT_DYNAMIC_PAST: fdp[...,first:idx_train_end],
-                FieldName.FEAT_STATIC_REAL: None,
-                FieldName.FEAT_STATIC_CAT: fsc
-            }
-            for (target, first, start, acc_target, fdr, fdc, fdp, fsc) in zip(target_values, second_sale, m5_dates, acc_target_values, dynamic_real, dynamic_cat, dynamic_past, stat_cat)
-        ]
-        #train_set = train_set[:20]
-        train_ds = ListDataset(train_set, freq="D", shuffle=False)
+    ### Test Set
+    test_set = [
+        {
+            FieldName.TARGET: target[..., :idx_test_end],
+            FieldName.START: start,
+            FieldName.FEAT_DYNAMIC_REAL: fdr[..., :idx_test_end],
+            FieldName.FEAT_DYNAMIC_CAT: fdc[..., :idx_test_end],
+            FieldName.FEAT_STATIC_CAT: fsc
+        }
+        for (target, start, fdr, fdc, fdp, fsc) in zip(target_values,
+                                                        start_dates,
+                                                        dynamic_real,
+                                                        dynamic_cat,
+                                                        stat_cat)
+    ]
+    test_ds = ListDataset(test_set, freq="D", shuffle=False)
 
-
-        # reset to first day
-        second_sale = np.zeros(30490, dtype=np.int32)
-        m5_dates = [start_date + pd.DateOffset(days=int(d)) for d in second_sale]
-
-        ### Validation Set
-        val_set = [
-            {
-                FieldName.TARGET: target[first:idx_val_end],
-                FieldName.START: start,
-                FieldName.FEAT_DYNAMIC_REAL: fdr[...,first:idx_val_end],
-                FieldName.FEAT_DYNAMIC_CAT: fdc[...,first:idx_val_end],
-                FieldName.FEAT_DYNAMIC_PAST: fdp[...,first:idx_val_end],
-                FieldName.FEAT_STATIC_REAL: None,
-                FieldName.FEAT_STATIC_CAT: fsc
-            }
-            for i, (target, first, start, acc_target, fdr, fdc, fdp, fsc) in enumerate(zip(target_values, second_sale, 
-                                                m5_dates,
-                                                acc_target_values,
-                                                dynamic_real,
-                                                dynamic_cat,
-                                                dynamic_past,
-                                                stat_cat))
-        ]
-        #val_set = val_set[:20]
-        val_ds = ListDataset(val_set, freq="D")
-
-        return train_ds, val_ds, stat_cat_cardinalities
-
-    else:
-        idx_end = prediction_start-1+28
-        ### Test Set
-        test_set = [
-            {
-                FieldName.TARGET: target[first:idx_end],
-                FieldName.START: start,
-                FieldName.FEAT_DYNAMIC_REAL: fdr[...,first:idx_end],
-                FieldName.FEAT_DYNAMIC_CAT: fdc[...,first:idx_end],
-                FieldName.FEAT_DYNAMIC_PAST: fdp[...,first:idx_end],
-                FieldName.FEAT_STATIC_REAL: None,
-                FieldName.FEAT_STATIC_CAT: fsc
-            }
-            for i, (target, first, start, acc_target, fdr, fdc, fdp, fsc) in enumerate(zip(target_values, second_sale, 
-                                                m5_dates,
-                                                acc_target_values,
-                                                dynamic_real,
-                                                dynamic_cat,
-                                                dynamic_past,
-                                                stat_cat))
-        ]
-        #test_set = test_set[:20]
-        test_ds = ListDataset(test_set, freq="D")       
-       
-        return test_ds
+    return train_ds, test_ds, stat_cat_cardinalities
