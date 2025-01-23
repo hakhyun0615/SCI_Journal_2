@@ -1,6 +1,4 @@
-import os
-import logging
-from pathlib import Path
+# fold: cmd k -> cmd 0
 
 import matplotlib.pyplot as plt
 
@@ -12,43 +10,6 @@ import numpy as np
 import pandas as pd
 from scipy.signal import detrend, butter, filtfilt
 from statsmodels.tsa.seasonal import STL
-
-################## logging
-
-def get_log_path(log_dir, log_comment='temp', trial='t0', mkdir=True):    
-    if log_comment=='':
-        log_comment='temp'
-    
-    base_path = os.path.join('logs', log_dir, log_comment)
-    trial_path = trial
-
-    full_log_path = f"{base_path}/{trial_path}"
-
-    path = Path(full_log_path)    
-    if mkdir==True:
-        if not path.exists():
-            path.mkdir(parents=True)
-
-    return full_log_path, base_path, trial_path
-
-def set_logger(text_log_path, text_log_file = 'log.txt', level = logging.INFO):
-    logger = logging.getLogger("mofl")
-    logger.setLevel(level)
-
-    formatter = logging.Formatter('%(asctime)s%(name)18s%(levelname)10s\t%(message)s')
-
-    stream_hander = logging.StreamHandler()
-    stream_hander.setFormatter(formatter)
-    logger.addHandler(stream_hander)
-
-    log_file = f"{text_log_path}/{text_log_file}"
-    file_handler = logging.FileHandler(log_file)
-    file_handler.setFormatter(formatter)
-    logger.addHandler(file_handler)
-
-    logger.propagate = False
-
-    logger.info(f"Logging to {log_file}...")
 
 ################## plot
 
@@ -199,18 +160,24 @@ def group_sales(group):
     
     return combined_sales
 
-def filter_sales_after_launch_and_group_sales(sales, columns):
+def filter_sales_after_launch_and_group_sales(sales):
     sales = sales.copy()
-    sales['sales_after_launch'] = sales.apply(lambda row: filter_sales_after_launch(row), axis=1)
+    sales['sales_after_launch'] = sales.apply(lambda row: filter_sales_after_launch(row), axis=1) # {901: 1, 902: 0, 903: 0, 904: 0, 905: 0, 906: ...
 
-    print(len(sales)) ###
-    sales['sales_after_launch_length'] = sales['sales_after_launch'].apply(lambda x: len(x)) 
-    sales = sales[sales['sales_after_launch_length'] >= (1941 - 600)]
-    print(len(sales))
+    # print(len(sales))
+    # sales['sales_after_launch_length'] = sales['sales_after_launch'].apply(lambda x: len(x)) 
+    # sales = sales[sales['sales_after_launch_length'] >= (1941 - 600)]
+    # print(len(sales))
 
-    grouped_sales = sales.groupby(columns).apply(group_sales)
+    grouped_sales = sales.groupby(['state_id', 'item_id']).apply(group_sales)
+    grouped_sales.reset_index(drop=False, inplace=True)
 
     return grouped_sales
+
+
+
+
+
 
 ################## analyze dominant period
 
@@ -303,9 +270,9 @@ def process_each_group(group_label, group_values, visualize=True):
     dates = pd.date_range(end="2016-05-22", periods=len(group_values), freq="D")
     time_series = pd.Series(group_values, index=dates)
 
-    print(len(time_series)) ###
-    time_series = time_series[-(1941 - 300):] 
-    print(len(time_series))
+    # print(len(time_series))
+    # time_series = time_series[-(1941 - 300):] 
+    # print(len(time_series))
 
     plot_with_matplotlib_3(time_series, group_label, visualize)
 
