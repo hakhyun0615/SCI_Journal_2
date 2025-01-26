@@ -1,11 +1,10 @@
 # fold: cmd k -> cmd 0
 
-import os
 import pickle
 import numpy as np
-import pandas as pd
 from scipy.signal import butter, filtfilt
-from sklearn.preprocessing import MinMaxScaler
+from scipy.special import expit
+from sklearn.preprocessing import MinMaxScaler, StandardScaler
 from statsmodels.nonparametric.smoothers_lowess import lowess
 
 import seaborn as sns
@@ -109,8 +108,9 @@ def normalize_period_strength(fourier_results, save_plot=False):
     period_strengths = np.array([result['period_strength'] for result in fourier_results.values()])
     
     # Min-Max 정규화
-    scaler = MinMaxScaler()
+    scaler = StandardScaler()
     normalized_period_strengths = scaler.fit_transform(period_strengths.reshape(-1, 1)).flatten()
+    normalized_period_strengths = expit(normalized_period_strengths)  # Sigmoid 적용
     
     # Normalized 값 추가 후 기존 데이터 제거
     for i, key in enumerate(fourier_results.keys()):
