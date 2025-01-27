@@ -2,7 +2,7 @@
 
 import pickle
 import numpy as np
-from scipy.signal import butter, filtfilt
+from scipy.signal import butter, filtfilt, freqz
 from scipy.special import expit
 from sklearn.preprocessing import MinMaxScaler, StandardScaler
 from statsmodels.nonparametric.smoothers_lowess import lowess
@@ -39,96 +39,131 @@ def create_first_sales_column_dict(df, save_result=False):
             
     return first_sales_column_dict
 
-def highpass_filter(sale_values, cutoff, fs=1, order=5):
-    # Nyquist 주파수 계산 (샘플링 주파수의 절반)
-    nyquist = 0.5 * fs
-    normal_cutoff = cutoff / nyquist
-    b, a = butter(order, normal_cutoff, btype='high', analog=False)
-    filtered_sale_values = filtfilt(b, a, sale_values)
-    return filtered_sale_values
-
-def estimate_dominant_periods_with_fourier(sale, start_col, save_plot=False):
+def estimate_periods_with_fourier(sale, start_col, num_periods, save_plot=False):
     # start_col 이후의 데이터만 선택
     cols = [col for col in sale.index if col.startswith('d_') and int(col.split('_')[1]) >= int(start_col.split('_')[1])]
     sale_values = sale[cols].values.astype(float)
 
-    # High-pass 필터 적용
-    filtered_sale_values = highpass_filter(sale_values, cutoff=0.01)
-    
-    # FFT 수행 및 파워 스펙트럼 계산
-    fft = np.fft.fft(filtered_sale_values)
-    power_spectrum = np.abs(fft) ** 2
+    # 원본 신호의 FFT
+    original_fft = np.fft.fft(sale_values)
     frequencies = np.fft.fftfreq(len(sale_values), d=1)
+    original_magnitudes = np.abs(original_fft)
+
+    # High-pass 필터 파라미터 계산 및 필터 적용
+    cutoff, order = 0.01, 10
+    nyquist = 0.5
+    normal_cutoff = cutoff / nyquist
+    b, a = butter(order, normal_cutoff, btype='high', analog=False)
+    w, h = freqz(b, a)  # 필터의 주파수 응답 계산
+    filtered_sale_values = filtfilt(b, a, sale_values)  # 직접 필터 적용
+
+    # 필터링된 신호의 FFT
+    fft = np.fft.fft(filtered_sale_values)
+    magnitudes = np.abs(fft)
 
     # 양의 주파수만 선택
     positive_mask = frequencies > 0
     positive_frequencies = frequencies[positive_mask]
-    positive_power = power_spectrum[positive_mask]
+    positive_magnitudes = magnitudes[positive_mask]
 
     # 진폭을 내림차순으로 정렬
-    sorted_indices = np.argsort(positive_power)[::-1]
-    sorted_frequencies = positive_frequencies[sorted_indices]
-    sorted_power = positive_power[sorted_indices]
+    sorted_indices = np.argsort(positive_magnitudes)[::-1]
+    
+    # 진폭 순으로 주파수 정렬 후 주기와 세기 계산
+    positive_frequencies = positive_frequencies[sorted_indices]
+    positive_periods = 1 / positive_frequencies
+    positive_strength = positive_magnitudes[sorted_indices] / np.max(positive_magnitudes)
+    
 
-    # 기본 주파수와 주기 세기 계산
-    fundamental_frequency = sorted_frequencies[0]  # 가장 높은 파워의 주파수
-    fundamental_period = 1 / fundamental_frequency
-    period_strength = sorted_power[0] / np.sum(positive_power)  # 기본 주파수 파워 비율
+    selected_indices = []  # 원래 positive_periods에서 선택된 인덱스를 저장
+    selected_periods = []  # 선택된 고유한 정수 주기
+    selected_strengths  = []  # 선택된 주기의 세기
+    unique_periods = set()
 
-    # 파워 스펙트럼 시각화 및 time_series 추가
+    for i, period in enumerate(positive_periods):
+        int_period = int(period)
+        if int_period not in unique_periods and int_period < 100:
+            unique_periods.add(int_period) # 고유한 주기 값 추가
+            selected_periods.append(int_period) # 정수 주기를 저장
+            selected_strengths.append(positive_strength[i])  # 해당 주기의 세기 저장
+            selected_indices.append(sorted_indices[i])  # 원래 인덱스를 저장
+        
+        if len(selected_periods) >= num_periods:
+            break
+
+    # 배열로 변환
+    selected_periods = np.array(selected_periods)
+    selected_strengths = np.array(selected_strengths)
+    selected_indices = np.array(selected_indices)
+
     if save_plot:
         fig, axs = plt.subplots(2, 1, figsize=(15, 10))
+        
+        # 첫 번째 서브플롯: FFT magnitude와 필터 응답
+        # Original FFT
+        freq_range = frequencies[:len(frequencies)//2]
+        axs[0].plot(freq_range, original_magnitudes[:len(frequencies)//2] / np.max(original_magnitudes), 
+                label="Original FFT (normalized)", alpha=0.7)
+        # Filter response
+        w_hz = w * nyquist / np.pi  # Convert normalized frequency to Hz
+        axs[0].plot(w_hz, np.abs(h), 'r--', label='Filter Response', alpha=0.7)
+        axs[0].set_title('Original Frequency Domain & Filter Response')
+        axs[0].set_xlabel('Frequency [Hz]')
+        axs[0].set_ylabel('Normalized Magnitude')
+        axs[0].set_xscale('log')  # 로그 스케일로 변경
+        axs[0].set_xlim([0.001, 0.5])  # x축 범위 설정
+        axs[0].legend()
 
-        # 첫 번째 서브플롯: time_series
-        axs[0].plot(sale_values, label=f"Time Series - {sale['state_id']}, {sale['item_id']}")
+        # 두 번째 서브플롯: Filtered FFT
+        axs[1] = plt.subplot(313)
+        axs[1].plot(freq_range, magnitudes[:len(frequencies)//2] / np.max(magnitudes), 
+                label="Filtered FFT (normalized)", alpha=0.7)
+        axs[1].set_title('Filtered Frequency Domain')
+        axs[1].set_xlabel('Frequency [Hz]')
+        axs[1].set_ylabel('Normalized Magnitude')
+        axs[1].set_xscale('log')  # 로그 스케일로 변경
+        axs[1].set_xlim([0.001, 0.5])  # x축 범위 설정
+        axs[1].legend()
+
+        plt.tight_layout()
+        plt.savefig(f"../data/fourier/plot/{sale['state_id']}, {sale['item_id']}.png")
+        plt.close()
+
+    # 복원
+    snr = 0
+        
+    reconstruct_fft = np.zeros_like(fft)
+    
+    reconstruct_fft[selected_indices] = fft[selected_indices]
+    reconstruct_fft[-np.array(selected_indices)] = fft[-np.array(selected_indices)]  # 음의 주파수 성분도 추가
+
+    # 복원 신호 생성
+    reconstructed_values = np.fft.ifft(reconstruct_fft).real
+
+    # SNR 계산
+    original_energy = np.sum(np.abs(filtered_sale_values) ** 2)
+    error_energy = np.sum(np.abs(filtered_sale_values - reconstructed_values) ** 2)
+    snr = 10 * np.log10(original_energy / error_energy)
+
+    if save_plot:
+        fig, axs = plt.subplots(2, 1, figsize=(15, 10))
+        
+        axs[0].plot(sale_values, label=f"Original - {sale['state_id']}, {sale['item_id']}")
+        axs[0].plot(filtered_sale_values, label="Filtered Signal", linestyle="dashed", alpha=0.7)
+        axs[0].plot(reconstructed_values, label="Reconstructed Signal", linestyle="dotted", alpha=0.7)
         axs[0].set_title('Time Series')
         axs[0].set_xlabel('Time')
         axs[0].set_ylabel('Value')
         axs[0].legend()
 
-        # 두 번째 서브플롯: 파워 스펙트럼
-        axs[1].plot(positive_frequencies, positive_power, label=f"Power Spectrum - {sale['state_id']}, {sale['item_id']}")
-        axs[1].axvline(fundamental_frequency, label='Fundamental Frequency', color='r', linestyle='-', alpha=0.8)
-        axs[1].set_title('Power Spectrum')
-        axs[1].set_xlabel('Frequency')
-        axs[1].set_ylabel('Power')
-        axs[1].legend()
-        axs[1].set_xticks([fundamental_frequency])
-        axs[1].set_xticklabels([f"{fundamental_frequency:.2f}"], color='red', alpha=0.8)
-
-        # 플롯 저장
         plt.tight_layout()
-        plt.savefig(f"../data/fourier/plot/{sale['state_id']}, {sale['item_id']}.png")
+        plt.savefig(f"../data/fourier/inverse_plot/{sale['state_id']}, {sale['item_id']}.png")
         plt.close()
 
-    return fundamental_period, period_strength
+    return selected_periods, selected_strengths, snr
 
-def normalize_period_strength(fourier_results, save_plot=False):
-    # Period Strength 데이터 추출
-    period_strengths = np.array([result['period_strength'] for result in fourier_results.values()])
-    
-    # Min-Max 정규화
-    scaler = StandardScaler()
-    normalized_period_strengths = scaler.fit_transform(period_strengths.reshape(-1, 1)).flatten()
-    normalized_period_strengths = expit(normalized_period_strengths)  # Sigmoid 적용
-    
-    # Normalized 값 추가 후 기존 데이터 제거
-    for i, key in enumerate(fourier_results.keys()):
-        fourier_results[key]['normalized_period_strength'] = normalized_period_strengths[i]
-        # 기존 period_strength 제거
-        del fourier_results[key]['period_strength']
 
-    # KDE Plot 시각화
-    if save_plot:
-        sns.kdeplot(normalized_period_strengths, color='#1f77b4', fill=True)
-        plt.xlabel('Normalized Period Strength')
-        plt.ylabel('Density')
-        plt.savefig(f"../data/fourier/plot/normalized_period_strengths.png")
-        plt.close()
-
-    return fourier_results
-
-def analyze_period_with_fourier(sales, first_sales_column_dict, save_result=False, save_plot=False):
+def analyze_period_with_fourier(sales, first_sales_column_dict, num_periods, save_result=False, save_plot=False):
     # Fundamental Period, Period Strength
     fourier_results = {}
 
@@ -140,16 +175,14 @@ def analyze_period_with_fourier(sales, first_sales_column_dict, save_result=Fals
         start_col = first_sales_column_dict.get(key)
 
         # Fourier 분석 수행
-        fundamental_period, period_strength = estimate_dominant_periods_with_fourier(sale, start_col, save_plot=save_plot)
+        selected_periods, selected_strengths, snr = estimate_periods_with_fourier(sale, start_col, num_periods, save_plot=save_plot)
 
         # 결과 저장
         fourier_results[key] = {
-            'fundamental_period': round(fundamental_period),
-            'period_strength': period_strength,
+            'selected_periods': selected_periods,
+            'selected_strengths': selected_strengths,
+            'snr': snr,
         }
-
-    # Period Strength 정규화
-    fourier_results = normalize_period_strength(fourier_results, save_plot=save_plot)
 
     # 결과 저장 (Pickle 파일)
     if save_result:
