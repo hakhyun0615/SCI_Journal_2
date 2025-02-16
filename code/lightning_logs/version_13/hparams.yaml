@@ -1,0 +1,39 @@
+lr: 0.1
+model_kwargs:
+  c_feat_dynamic_cat:
+  - 2
+  - 2
+  - 2
+  - 31
+  - 31
+  - 5
+  - 5
+  c_feat_static_cat:
+  - 1
+  c_past_feat_dynamic_cat: []
+  context_length: 28
+  d_feat_dynamic_real:
+  - 1
+  - 1
+  - 1
+  - 32
+  d_feat_static_real:
+  - 1
+  d_hidden: 64
+  d_past_feat_dynamic_real: []
+  d_var: 32
+  distr_output: !!python/object/apply:copyreg.__newobj_ex__
+    args:
+    - !!python/name:gluonts.torch.distributions.studentT.StudentTOutput ''
+    - !!python/tuple []
+    - &id001 !!python/object/apply:collections.OrderedDict
+      - - - beta
+          - 0.0
+    state:
+      __init_args__: *id001
+      beta: 0.0
+  dropout_rate: 0.1
+  num_heads: 4
+  prediction_length: 28
+patience: 10
+weight_decay: 1.0e-08
