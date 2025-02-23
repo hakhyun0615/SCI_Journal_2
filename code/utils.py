@@ -5,7 +5,6 @@ import shutil
 import tempfile
 import numpy as np
 from typing import Dict, Tuple, Set, List, Any
-import gc
 
 import mxnet as mx
 from gluonts.dataset.field_names import FieldName
