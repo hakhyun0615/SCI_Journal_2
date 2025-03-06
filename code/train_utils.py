@@ -236,7 +236,6 @@ def normalize_dataset(
     normalized_valid = normalizer.transform(valid_datasset)
     normalized_test = normalizer.transform(test_dataset)
     
-<<<<<<<< HEAD:code/utils.py
     return normalized_train, normalized_valid, normalized_test, normalizer
 
 def calculate_metrics(y_true, y_pred):
@@ -260,6 +259,3 @@ def calculate_metrics(y_true, y_pred):
     }
     
     return metrics
-========
-    return normalized_train, normalized_test, normalizer
->>>>>>>> 7714d5d0812257021a8f1d2d8422a688ea9ccf5c:code/train_utils.py

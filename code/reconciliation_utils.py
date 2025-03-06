@@ -1,3 +1,5 @@
+import numpy as np
+
 def parse_id_components(id_str):
     parts = id_str.split('_')
     
