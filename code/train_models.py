@@ -9,7 +9,7 @@ from gluonts.mx.model.n_beats import NBEATSEstimator
 from gluonts.mx.model.transformer import TransformerEstimator
 
 
-def create_estimators(level_idx, train_dataset):
+def create_estimator(level_idx, train_dataset, estimator_name):
     estimators = {
         "DeepAR": DeepAREstimator(
             freq="D",
@@ -111,4 +111,4 @@ def create_estimators(level_idx, train_dataset):
             cardinality=[len(train_dataset)],
         )
     }
-    return estimators
+    return estimators[estimator_name]
