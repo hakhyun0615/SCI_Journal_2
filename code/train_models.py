@@ -2,6 +2,7 @@ from gluonts.mx.model.deepar import DeepAREstimator
 from gluonts.mx.model.seq2seq import MQRNNEstimator
 from gluonts.mx.model.tft import TemporalFusionTransformerEstimator
 from gluonts.mx.model.deepstate import DeepStateEstimator
+from gluonts.mx.model.deep_factor import DeepFactorEstimator
 from gluonts.mx.model.wavenet import WaveNetEstimator
 from gluonts.mx.model.seq2seq import MQCNNEstimator
 from gluonts.mx.model.n_beats import NBEATSEstimator
@@ -10,19 +11,19 @@ from gluonts.mx.model.transformer import TransformerEstimator
 
 def create_estimator(level_idx, train_dataset, estimator_name):
     estimators = {
-        # "DeepAR": DeepAREstimator(
-        #     freq="D",
-        #     context_length=28,
-        #     prediction_length=28,
-        #     use_feat_dynamic_real=True,
-        #     use_feat_static_cat=(level_idx != 1),
-        #     cardinality=[len(train_dataset)] if level_idx != 1 else None,
-        # ),
-        # "MQRNN": MQRNNEstimator(
-        #     freq="D",
-        #     context_length=28,
-        #     prediction_length=28,
-        # ),
+        "DeepAR": DeepAREstimator(
+            freq="D",
+            context_length=28,
+            prediction_length=28,
+            use_feat_dynamic_real=True,
+            use_feat_static_cat=(level_idx != 1),
+            cardinality=[len(train_dataset)] if level_idx != 1 else None,
+        ),
+        "MQRNN": MQRNNEstimator(
+            freq="D",
+            context_length=28,
+            prediction_length=28,
+        ),
         "TFT": TemporalFusionTransformerEstimator(
             freq="D",
             context_length=28,
@@ -71,39 +72,45 @@ def create_estimator(level_idx, train_dataset, estimator_name):
             },
             static_cardinalities={"id": len(train_dataset)},
         ),
-        # "DeepState": DeepStateEstimator(
-        #     freq="D",
-        #     past_length=28,
-        #     prediction_length=28,
-        #     use_feat_dynamic_real=True,
-        #     use_feat_static_cat=(level_idx != 1),
-        #     cardinality=[len(train_dataset)],
-        # ),
-        # "WaveNet": WaveNetEstimator(
-        #     freq="D",
-        #     prediction_length=28,
-        #     cardinality=[len(train_dataset)],
-        # ),
-        # "MQCNN": MQCNNEstimator(
-        #     freq="D",
-        #     context_length=28,
-        #     prediction_length=28,
-        #     use_feat_dynamic_real=True,
-        #     use_feat_static_cat=True,
-        #     cardinality=[len(train_dataset)],
-        # ),
-        # "NBEATS": NBEATSEstimator(
-        #     freq="D",
-        #     context_length=28,
-        #     prediction_length=28,
-        # ),
-        # "Transformer": TransformerEstimator(
-        #     freq="D",
-        #     context_length=28,
-        #     prediction_length=28,
-        #     use_feat_dynamic_real=True,
-        #     use_feat_static_cat=True,
-        #     cardinality=[len(train_dataset)],
-        # )
+        "DeepState": DeepStateEstimator(
+            freq="D",
+            past_length=28,
+            prediction_length=28,
+            use_feat_dynamic_real=True,
+            use_feat_static_cat=(level_idx != 1),
+            cardinality=[len(train_dataset)],
+        ),
+        "DeepFactor": DeepFactorEstimator(
+            freq="D",
+            context_length=28,
+            prediction_length=28,
+            cardinality=[len(train_dataset)],
+        ),
+        "WaveNet": WaveNetEstimator(
+            freq="D",
+            prediction_length=28,
+            cardinality=[len(train_dataset)],
+        ),
+        "MQCNN": MQCNNEstimator(
+            freq="D",
+            context_length=28,
+            prediction_length=28,
+            use_feat_dynamic_real=True,
+            use_feat_static_cat=True,
+            cardinality=[len(train_dataset)],
+        ),
+        "NBEATS": NBEATSEstimator(
+            freq="D",
+            context_length=28,
+            prediction_length=28,
+        ),
+        "Transformer": TransformerEstimator(
+            freq="D",
+            context_length=28,
+            prediction_length=28,
+            use_feat_dynamic_real=True,
+            use_feat_static_cat=True,
+            cardinality=[len(train_dataset)],
+        )
     }
     return estimators[estimator_name]
