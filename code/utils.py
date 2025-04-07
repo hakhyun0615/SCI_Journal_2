@@ -2,7 +2,6 @@ import GPUtil
 import psutil
 import numpy as np
 
-
 def highlight_print(text, color='yellow'):
     colors = {
         'yellow': '\033[93m',
@@ -43,45 +42,3 @@ def reduce_memory(df, verbose=False):
     end_mem = df.memory_usage().sum() / 1024**2
     if verbose: print('Memory usage decreased to {:5.2f} Mb ({:.1f}% reduction)'.format(end_mem, 100 * (start_mem - end_mem) / start_mem))
     return df
-
-def get_optimal_num_batches(gpu_available, verbose=False):
-    # memory
-    memory_info = psutil.virtual_memory()
-    total_memory = memory_info.total
-    available_memory = memory_info.available
-
-    # cpu
-    cpu_usage = psutil.cpu_percent(interval=None)
-
-    # gpu
-    if gpu_available:
-        try:
-            gpus = GPUtil.getGPUs()
-            if gpus:
-                gpu_memory = sum(gpu.memoryTotal for gpu in gpus)
-                gpu_memory_available = sum(gpu.memoryFree for gpu in gpus)
-            else:
-                gpu_memory = 0
-                gpu_memory_available = 0
-        except ImportError:
-            gpu_memory = 0
-            gpu_memory_available = 0
-    else:
-        gpu_memory = 0
-        gpu_memory_available = 0
-
-    # optimal
-    memory_factor = available_memory / total_memory
-    cpu_factor = (100 - cpu_usage) / 100
-    gpu_factor = gpu_memory_available / max(gpu_memory, 1) if gpu_available else 1
-    optimal_num_batches = int(200 * (0.5 * memory_factor + 0.3 * cpu_factor + 0.2 * gpu_factor))
-
-    if verbose: print(f"Optimal num batches: {optimal_num_batches}")
-    
-    return max(1, optimal_num_batches)
-
-def format_time(seconds):
-    hours = int(seconds // 3600)
-    minutes = int((seconds % 3600) // 60)
-    seconds = int(seconds % 60)
-    return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
