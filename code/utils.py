@@ -1,3 +1,15 @@
+# import nbformat
+# from nbconvert import PythonExporter
+
+# with open("5. graph_structure.ipynb", "r", encoding="utf-8") as f:
+#     notebook = nbformat.read(f, as_version=4)
+
+# exporter = PythonExporter()
+# source, _ = exporter.from_notebook_node(notebook)
+
+# with open("5. graph_structure.py", "w", encoding="utf-8") as f:
+#     f.write(source)
+
 import GPUtil
 import psutil
 import numpy as np
