@@ -8,7 +8,6 @@ from gluonts.mx.model.seq2seq import MQCNNEstimator
 from gluonts.mx.model.n_beats import NBEATSEstimator
 from gluonts.mx.model.transformer import TransformerEstimator
 
-
 def create_estimator(level_idx, train_dataset, estimator_name):
     estimators = {
         "DeepAR": DeepAREstimator(
