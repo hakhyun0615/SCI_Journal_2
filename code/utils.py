@@ -40,3 +40,19 @@ def reduce_memory(df, verbose=False):
     end_mem = df.memory_usage().sum() / 1024**2
     if verbose: print('Memory usage decreased to {:5.2f} Mb ({:.1f}% reduction)'.format(end_mem, 100 * (start_mem - end_mem) / start_mem))
     return df
+
+
+import nbformat
+from nbconvert import PythonExporter
+
+# ipynb 파일 읽기
+with open("2. graph_dataset.ipynb", "r", encoding="utf-8") as f:
+    notebook_content = nbformat.read(f, as_version=4)
+
+# Python 코드로 변환
+exporter = PythonExporter()
+python_code, _ = exporter.from_notebook_node(notebook_content)
+
+# py 파일 저장
+with open("2. graph_dataset.py", "w", encoding="utf-8") as f:
+    f.write(python_code)
